@@ -1,0 +1,8 @@
+apiVersion: v2
+name: service
+description: The standard chart for platform services. About 40 services use it.
+type: application
+version: 3.4.1
+appVersion: "1.0"
+maintainers:
+  - name: Platform SRE

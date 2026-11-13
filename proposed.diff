@@ -1,0 +1,132 @@
+diff --git a/charts/service/templates/_helpers.tpl b/charts/service/templates/_helpers.tpl
+--- a/charts/service/templates/_helpers.tpl
++++ b/charts/service/templates/_helpers.tpl
+@@ -9,12 +9,12 @@
+ {{- define "service.selectorLabels" -}}
+ app.kubernetes.io/name: {{ include "service.name" . }}
+ app.kubernetes.io/instance: {{ .Release.Name }}
++app.kubernetes.io/version: {{ .Values.image.tag | quote }}
+ {{- end -}}
+ 
+ {{- define "service.labels" -}}
+ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+ {{ include "service.selectorLabels" . }}
+-app.kubernetes.io/version: {{ .Values.image.tag | quote }}
+ app.kubernetes.io/managed-by: {{ .Release.Service }}
+ {{- end -}}
+ 
+diff --git a/charts/service/templates/poddisruptionbudget.yaml b/charts/service/templates/poddisruptionbudget.yaml
+new file mode 100644
+--- /dev/null
++++ b/charts/service/templates/poddisruptionbudget.yaml
+@@ -0,0 +1,13 @@
++{{- if .Values.podDisruptionBudget.enabled }}
++apiVersion: policy/v1
++kind: PodDisruptionBudget
++metadata:
++  name: {{ include "service.fullname" . }}
++  labels:
++    {{- include "service.labels" . | nindent 4 }}
++spec:
++  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
++  selector:
++    matchLabels:
++      {{- include "service.selectorLabels" . | nindent 6 }}
++{{- end }}
+diff --git a/charts/service/templates/serviceaccount.yaml b/charts/service/templates/serviceaccount.yaml
+--- a/charts/service/templates/serviceaccount.yaml
++++ b/charts/service/templates/serviceaccount.yaml
+@@ -5,4 +5,8 @@
+   name: {{ include "service.serviceAccountName" . }}
+   labels:
+     {{- include "service.labels" . | nindent 4 }}
++  {{- if .Values.serviceAccount.gcpServiceAccount }}
++  annotations:
++    iam.gke.io/gcp-service-account: {{ .Values.serviceAccount.gcpServiceAccount }}
++  {{- end }}
+ {{- end }}
+diff --git a/charts/service/values.yaml b/charts/service/values.yaml
+--- a/charts/service/values.yaml
++++ b/charts/service/values.yaml
+@@ -1,4 +1,4 @@
+-replicaCount: 1
++replicaCount: 3
+ 
+ image:
+   repository: registry.internal.example/placeholder
+@@ -8,6 +8,8 @@
+ serviceAccount:
+   create: true
+   name: ""
++  # Google service account to impersonate through Workload Identity.
++  gcpServiceAccount: ""
+ 
+ service:
+   port: 8080
+@@ -15,11 +17,14 @@
+ resources:
+   requests:
+     cpu: 100m
+-    memory: 512Mi
++    memory: 256Mi
+   limits:
+-    cpu: 500m
+-    memory: 512Mi
++    memory: 256Mi
+ 
+ probes:
+-  liveness: /healthz
++  liveness: /ready
+   readiness: /ready
++
++podDisruptionBudget:
++  enabled: true
++  minAvailable: 100%
+diff --git a/releases/checkout-service-dev.yaml b/releases/checkout-service-dev.yaml
+--- a/releases/checkout-service-dev.yaml
++++ b/releases/checkout-service-dev.yaml
+@@ -17,4 +17,5 @@
+     image:
+       repository: registry.internal.example/checkout-service
+       tag: "1.5.0-rc3"
+-    replicaCount: 1
++    serviceAccount:
++      gcpServiceAccount: checkout-service@ml-platform-prod.iam.gserviceaccount.com
+diff --git a/releases/checkout-service-prod.yaml b/releases/checkout-service-prod.yaml
+--- a/releases/checkout-service-prod.yaml
++++ b/releases/checkout-service-prod.yaml
+@@ -17,4 +17,5 @@
+     image:
+       repository: registry.internal.example/checkout-service
+       tag: "1.4.2"
+-    replicaCount: 1
++    serviceAccount:
++      gcpServiceAccount: checkout-service@ml-platform-prod.iam.gserviceaccount.com
+diff --git a/terraform/checkout-service.tf b/terraform/checkout-service.tf
+--- a/terraform/checkout-service.tf
++++ b/terraform/checkout-service.tf
+@@ -5,7 +5,7 @@
+ }
+ 
+ resource "google_storage_bucket" "receipts" {
+-  name                        = "ml-checkout-reciepts"
++  name                        = "ml-checkout-receipts"
+   project                     = var.project_id
+   location                    = "EU"
+   uniform_bucket_level_access = true
+@@ -20,3 +20,15 @@
+     }
+   }
+ }
++
++resource "google_project_iam_member" "checkout_storage" {
++  project = var.project_id
++  role    = "roles/storage.admin"
++  member  = "serviceAccount:${google_service_account.checkout.email}"
++}
++
++resource "google_service_account_iam_member" "checkout_workload_identity" {
++  service_account_id = google_service_account.checkout.name
++  role               = "roles/iam.workloadIdentityUser"
++  member             = "serviceAccount:${var.project_id}.svc.id.goog[default/checkout-service]"
++}
