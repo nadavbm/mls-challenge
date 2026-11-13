@@ -1,4 +1,4 @@
-replicaCount: 1
+replicaCount: 3
 
 image:
   repository: registry.internal.example/placeholder
@@ -8,6 +8,8 @@ image:
 serviceAccount:
   create: true
   name: ""
+  # Google service account to impersonate through Workload Identity.
+  gcpServiceAccount: ""
 
 service:
   port: 8080
@@ -17,9 +19,12 @@ resources:
     cpu: 100m
     memory: 512Mi
   limits:
-    cpu: 500m
     memory: 512Mi
 
 probes:
   liveness: /healthz
   readiness: /ready
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

@@ -5,7 +5,7 @@ resource "google_service_account" "checkout" {
 }
 
 resource "google_storage_bucket" "receipts" {
-  name                        = "ml-checkout-reciepts"
+  name                        = "ml-checkout-receipts"
   project                     = var.project_id
   location                    = "EU"
   uniform_bucket_level_access = true
@@ -19,4 +19,16 @@ resource "google_storage_bucket" "receipts" {
       type = "Delete"
     }
   }
+}
+
+resource "google_project_iam_member" "checkout_storage" {
+  project = var.project_id
+  role    = "roles/storage.admin"
+  member  = "serviceAccount:${google_service_account.checkout.email}"
+}
+
+resource "google_service_account_iam_member" "checkout_workload_identity" {
+  service_account_id = google_service_account.checkout.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[default/checkout-service]"
 }
