@@ -17,4 +17,5 @@ spec:
     image:
       repository: registry.internal.example/checkout-service
       tag: "1.4.2"
-    replicaCount: 1
+    serviceAccount:
+      gcpServiceAccount: checkout-service@ml-platform-prod.iam.gserviceaccount.com
