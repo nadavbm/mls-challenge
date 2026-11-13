@@ -17,14 +17,14 @@ service:
 resources:
   requests:
     cpu: 100m
-    memory: 256Mi
+    memory: 512Mi
   limits:
-    memory: 256Mi
+    memory: 512Mi
 
 probes:
-  liveness: /ready
+  liveness: /healthz
   readiness: /ready
 
 podDisruptionBudget:
   enabled: true
-  minAvailable: 100%
+  minAvailable: 2
